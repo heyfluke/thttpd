@@ -127,6 +127,32 @@ def getLogger():
     return logger
 
 
+############## 中间件相关  #########
+class MiddleWare(object):
+    def __init__(self):
+        pass
+    def filter_output_data(self, sock, filename, data):
+        return data
+
+class MySleeperMiddleWare(MiddleWare):
+    def __init__(self):
+        self.SLEEP_TIME = 2
+        self.SLEEP_BYTE_INTERVAL = 1024
+        self.sock_data = {}
+        self.last_sleep = {}
+    def filter_output_data(self, sock, filename, data):
+        if sock not in self.sock_data:
+            self.sock_data[sock] = 0
+            self.last_sleep[sock] = 0
+        length = len(data)
+        self.sock_data[sock] += length
+        if self.last_sleep[sock] + self.SLEEP_BYTE_INTERVAL < self.sock_data[sock]:
+            self.last_sleep[sock] = self.sock_data[sock]
+            print 'sleep %ds for filename %s, current data bytes: %d' % (self.SLEEP_TIME, filename, self.sock_data[sock])
+            time.sleep(self.SLEEP_TIME)
+        return data
+
+
 
 ############################
 
@@ -151,6 +177,16 @@ class ServThread(threading.Thread):
         
         self.delimiter = '\r\n'
         self.MAX_LINE_LENGTH = 1024
+
+        self.middle_wares = []
+
+    def append_middle_ware(self, middle_ware):
+        self.middle_wares.append(middle_ware)
+
+    def filter_output_data(self, filename, data):
+        for middle_ware in self.middle_wares:
+            data = middle_ware.filter_output_data(self.clisock, filename, data)
+        return data
         
     def run(self):
         self.get_conn_time = time.time()
@@ -268,7 +304,6 @@ class ServThread(threading.Thread):
         content_length = 0
         bytes_remain = 0
         try:
-            print 'file_path', file_path
             if file_path[-1] == '/': 
                 print 'append index.html to', file_path
                 
@@ -312,7 +347,7 @@ class ServThread(threading.Thread):
                 self.sendLine('')
                 #print dir(self.transport)
                 while bytes_pos < file_size:
-                    self.clisock.send(f.read(block_size))
+                    self.clisock.send(self.filter_output_data(file_path, f.read(block_size)))
                     #print 'send1'
                     bytes_pos = f.tell()
                 print 'send end'
@@ -336,7 +371,7 @@ class ServThread(threading.Thread):
                     #print 'read_size %d' % (read_size)
                     buf = f.read(read_size)
                     #print 'buf', buf
-                    self.clisock.send(buf)
+                    self.clisock.send(self.filter_output_data(file_path, buf))
                     bytes_pos = f.tell()
                     #print 'send2', bytes_pos, hex(ord(buf[-1]))
                 print 'send end'
@@ -423,6 +458,11 @@ def MainLoop(port):
             print 'accept a connection from %s:%d, time %lf' % (cliaddr[0], cliaddr[1], time.time())
             threadno += 1
             work_thread = ServThread(clisock, threadno)
+
+            # FIXME: auto load middlewares from middleware path
+            sleep_middleware = MySleeperMiddleWare()
+            work_thread.append_middle_ware(sleep_middleware)
+
             work_thread.start()
             #print clisock.recv(720)
             #clisock.send('HTTP/1.1 200 OK\r\n')
