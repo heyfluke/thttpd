@@ -1,0 +1,4 @@
+beta2/
+*.log
+*.pyc
+.DS_Store
