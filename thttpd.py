@@ -11,11 +11,7 @@ ChangeLogs
 已经支持简单的http服务，支持index.html，支持列目录
 '''
 
-import threading
-import socket
-import select
-import time
-import logging
+import sys, os, threading, socket, select, time, logging
 
 G = {}
 G['port'] = 9999
@@ -272,6 +268,7 @@ class ServThread(threading.Thread):
         content_length = 0
         bytes_remain = 0
         try:
+            print 'file_path', file_path
             if file_path[-1] == '/': 
                 print 'append index.html to', file_path
                 
@@ -279,15 +276,15 @@ class ServThread(threading.Thread):
                     body = makeHTMLpage(file_path)
                     self.sendLine('HTTP/1.1 200 OK')
                     self.sendLine('Server: UltraHttpd/1.0')
-                    self.sendLine('Content-Length: %d' % (body))
+                    self.sendLine('Content-Length: %d' % (len(body)))
                     self.sendLine('Connection: close')
                     self.sendLine('Content-Type: text/html')
                     self.sendLine('')
                     self.clisock.send(body)
                     return
                 file_path += 'index.html'
-        except:
-            pass
+        except Exception, e:
+            print 'exception', e
         try:
             f = open(file_path, 'rb')
             f.seek(0, 2)
@@ -420,8 +417,8 @@ def MainLoop(port):
     servsock.bind(('', port))
     servsock.listen(1)
     threadno = 0
-    while True:
-        try:
+    try:
+        while True:
             clisock, cliaddr = servsock.accept()
             print 'accept a connection from %s:%d, time %lf' % (cliaddr[0], cliaddr[1], time.time())
             threadno += 1
@@ -433,9 +430,13 @@ def MainLoop(port):
             #clisock.send('\r\n')
             #clisock.send('Hello World\n')
             #clisock.close()
-        except KeyboardInterrupt, e:
-            print 'Keyboard Interrupt'
-            break
+    except KeyboardInterrupt, e:
+        print 'Keyboard Interrupt'
+        try:
+            servsock.close()
+        except Exception,e:
+            pass
+        sys.exit(1)
 
 if __name__ == '__main__':
     print 'Date:', strfGMTime(), 'GMT'
