@@ -56,11 +56,36 @@ def makeHTMLtable(top, depthfirst=False):
         for name in names:
             try:
               ext=os.path.basename(name).split('.', 1)[1]            
-              if ext=='html' or ext=='htm':
-                  ret.append('   <tr><td class="file"><a href="%s/%s">%s%s</a></td></tr>\n'%(escape(top),escape(name),escape(top),escape(name)))
+              if ext in ('html', 'htm', 'flv', 'mp4', 'mkv'):
+                  ret.append('   <tr><td class="file"><a href="%s">%s</a></td></tr>\n'%(escape(name),escape(name)))
                   mark=1                
             except IndexError:
                   pass
+    ret.append('</table>')
+    if mark ==1:
+       return ''.join(ret) # Much faster than += method
+    else:
+       return ''
+
+def makeFileList(top):
+    import os, stat, types
+    from xml.sax.saxutils import escape # To quote out things like &amp;
+    ret = ['<table class="fileList">\n']
+    mark=0
+
+    names = os.listdir(top)
+    for name in names:
+        try:
+            st = os.lstat(os.path.join(top, name))
+        except os.error:
+            continue
+        #ext=os.path.basename(name).split('.', 1)[1]    # FIXME: MIME
+        mark = 1   
+        if stat.S_ISDIR(st.st_mode):
+            ret.append('   <tr><td class="file"><a href="%s/">%s/</a></td></tr>\n'%(escape(name),escape(name)))
+        else:
+            ret.append('   <tr><td class="file"><a href="%s">%s</a></td></tr>\n'%(escape(name),escape(name)))
+
     ret.append('</table>')
     if mark ==1:
        return ''.join(ret) # Much faster than += method
@@ -72,7 +97,7 @@ def makeHTMLpage(top, depthfirst=False):
                       '"http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">',
                       '<html>'
                       '<head>',
-                      '   <title>Search results</title>',
+                      '   <title>Index of .</title>',
                       '   <style type="text/css">',
                       '      table.fileList { text-align: left; }',
                       '      td.directory { font-weight: bold; }',
@@ -80,8 +105,10 @@ def makeHTMLpage(top, depthfirst=False):
                       '   </style>',
                       '</head>',
                       '<body>',
-                      '<h1>Search Results</h1>',
-                      makeHTMLtable(top, depthfirst),
+                      '<h1>Index of .</h1>',
+                      '<p><a href=..>..</a></p>',
+                      #makeHTMLtable(top, depthfirst),
+                      makeFileList(top),
                       '</body>',
                       '</html>'])
 
@@ -141,6 +168,9 @@ class MySleeperMiddleWare(MiddleWare):
         self.sock_data = {}
         self.last_sleep = {}
     def filter_output_data(self, sock, filename, data):
+        if filename.find('.flv') < 0:
+            print 'filename not contain .flv, so not sleep'
+            return data
         if sock not in self.sock_data:
             self.sock_data[sock] = 0
             self.last_sleep[sock] = 0
