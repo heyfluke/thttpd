@@ -29,44 +29,6 @@ def strfLocalTime(timestamp = time.time(), format = "%a, %d %b %Y %H:%M:%S"):
     time_tuple = time.localtime(timestamp)
     return time.strftime(format, time_tuple)
 
-# 产生目录html
-def walktree(top = ".", depthfirst = True):
-    """Walk the directory tree, starting from top. Credit to Noah Spurrier and Doug Fort."""
-    import os, stat, types
-    names = os.listdir(top)
-    if not depthfirst:
-        yield top, names
-    for name in names:
-        try:
-            st = os.lstat(os.path.join(top, name))
-        except os.error:
-            continue
-        if stat.S_ISDIR(st.st_mode):
-            for (newtop, children) in walktree (os.path.join(top, name), depthfirst):
-                yield newtop, children
-    if depthfirst:
-        yield top, names
-
-def makeHTMLtable(top, depthfirst=False):
-    from xml.sax.saxutils import escape # To quote out things like &amp;
-    ret = ['<table class="fileList">\n']
-    mark=0
-    for top, names in walktree(top):
-        #ret.append('   <tr><td class="directory">%s</td></tr>\n'%escape(top))
-        for name in names:
-            try:
-              ext=os.path.basename(name).split('.', 1)[1]            
-              if ext in ('html', 'htm', 'flv', 'mp4', 'mkv'):
-                  ret.append('   <tr><td class="file"><a href="%s">%s</a></td></tr>\n'%(escape(name),escape(name)))
-                  mark=1                
-            except IndexError:
-                  pass
-    ret.append('</table>')
-    if mark ==1:
-       return ''.join(ret) # Much faster than += method
-    else:
-       return ''
-
 def makeFileList(top):
     import os, stat, types
     from xml.sax.saxutils import escape # To quote out things like &amp;
