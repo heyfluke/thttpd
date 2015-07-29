@@ -3,9 +3,9 @@
 from thttpd import MiddleWare
 
 class FlvSpeedLimiterMiddleWare(MiddleWare):
-    
+
     def __init__(self):
-        self.SLEEP_TIME = 2
+        self.SLEEP_TIME = 1
         self.SLEEP_BYTE_INTERVAL = 1024
         self.sock_data = {}
         self.last_sleep = {}

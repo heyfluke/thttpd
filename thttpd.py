@@ -150,13 +150,16 @@ class ServThread(threading.Thread):
         msg = 'start handle the connection %lf' % (self.get_conn_time)
         self.doLog(msg)
 
-        while True:
-            if self.disconnected:
-                break
-            buf = self.clisock.recv(1024)
-            if len(buf) == 0:
-                break
-            self.dataReceived(buf)
+        try:
+            while True:
+                if self.disconnected:
+                    break
+                buf = self.clisock.recv(1024)
+                if len(buf) == 0:
+                    break
+                self.dataReceived(buf)
+        except socket.error, e:
+            print 'socket error', e
     
     def doLog(self, msg, bCritical=False):
         global logger
@@ -404,23 +407,40 @@ class ServThread(threading.Thread):
         print ("max line exceeded")
         self.lostConnection()
 
+    def stop(self):
+        try:
+            self.clisock.close()
+        except Exception, e:
+            print 'exception while stop socket thread', e
+
 def MainLoop(port, middlewares=[]):
     servsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     servsock.bind(('', port))
     servsock.listen(1)
     threadno = 0
+    threadlist = []
     try:
         while True:
             clisock, cliaddr = servsock.accept()
             print 'accept a connection from %s:%d, time %lf' % (cliaddr[0], cliaddr[1], time.time())
             threadno += 1
             work_thread = ServThread(clisock, threadno, middlewares)
+            threadlist.append(work_thread)
             work_thread.start()
 
     except KeyboardInterrupt, e:
         print 'Keyboard Interrupt'
         try:
-            servsock.close()
+            for work_thread in threadlist:
+                try:
+                    print 'stop thread'
+                    work_thread.stop()
+                except Exception, e:
+                    print 'stop thread Exception', e
+            try:
+                servsock.close()
+            except Exception, e:
+                print 'unable to close servsock', e
         except Exception,e:
             pass
         sys.exit(1)
