@@ -75,19 +75,6 @@ def makeHTMLpage(top, depthfirst=False):
                       '</html>'])
 
 # 日志模块
-'''
-def getLogger():
-    global G
-
-    logger = logging.getLogger()
-    hdlr = logging.FileHandler(G['log_file_path'])
-    formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
-    hdlr.setFormatter(formatter)
-    logger.addHandler(hdlr)
-    logger.setLevel(logging.NOTSET)
- 
-    return logger
-'''
 def getLogger():
     class SimpleLogger:
         def __init__(self, logfile_path):
@@ -123,33 +110,11 @@ class MiddleWare(object):
     def filter_output_data(self, sock, filename, data):
         return data
 
-class MySleeperMiddleWare(MiddleWare):
-    def __init__(self):
-        self.SLEEP_TIME = 2
-        self.SLEEP_BYTE_INTERVAL = 1024
-        self.sock_data = {}
-        self.last_sleep = {}
-    def filter_output_data(self, sock, filename, data):
-        if filename.find('.flv') < 0:
-            print 'filename not contain .flv, so not sleep'
-            return data
-        if sock not in self.sock_data:
-            self.sock_data[sock] = 0
-            self.last_sleep[sock] = 0
-        length = len(data)
-        self.sock_data[sock] += length
-        if self.last_sleep[sock] + self.SLEEP_BYTE_INTERVAL < self.sock_data[sock]:
-            self.last_sleep[sock] = self.sock_data[sock]
-            print 'sleep %ds for filename %s, current data bytes: %d' % (self.SLEEP_TIME, filename, self.sock_data[sock])
-            time.sleep(self.SLEEP_TIME)
-        return data
-
-
 
 ############################
 
 class ServThread(threading.Thread):
-    def __init__(self, clisock, threadno):
+    def __init__(self, clisock, threadno, middlewares=[]):
         threading.Thread.__init__(self)
         self.threadno = threadno
         self.clisock = clisock
@@ -170,14 +135,14 @@ class ServThread(threading.Thread):
         self.delimiter = '\r\n'
         self.MAX_LINE_LENGTH = 1024
 
-        self.middle_wares = []
+        self.middlewares = middlewares
 
-    def append_middle_ware(self, middle_ware):
-        self.middle_wares.append(middle_ware)
+    #def append_middle_ware(self, middle_ware):
+    #    self.middlewares.append(middle_ware)
 
     def filter_output_data(self, filename, data):
-        for middle_ware in self.middle_wares:
-            data = middle_ware.filter_output_data(self.clisock, filename, data)
+        for middleware in self.middlewares:
+            data = middleware.plugin_instance.filter_output_data(self.clisock, filename, data)
         return data
         
     def run(self):
@@ -439,7 +404,7 @@ class ServThread(threading.Thread):
         print ("max line exceeded")
         self.lostConnection()
 
-def MainLoop(port):
+def MainLoop(port, middlewares=[]):
     servsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     servsock.bind(('', port))
     servsock.listen(1)
@@ -449,19 +414,9 @@ def MainLoop(port):
             clisock, cliaddr = servsock.accept()
             print 'accept a connection from %s:%d, time %lf' % (cliaddr[0], cliaddr[1], time.time())
             threadno += 1
-            work_thread = ServThread(clisock, threadno)
-
-            # FIXME: auto load middlewares from middleware path
-            sleep_middleware = MySleeperMiddleWare()
-            work_thread.append_middle_ware(sleep_middleware)
-
+            work_thread = ServThread(clisock, threadno, middlewares)
             work_thread.start()
-            #print clisock.recv(720)
-            #clisock.send('HTTP/1.1 200 OK\r\n')
-            #clisock.send('Content-Length: %d' % (len('Hello World\n')))
-            #clisock.send('\r\n')
-            #clisock.send('Hello World\n')
-            #clisock.close()
+
     except KeyboardInterrupt, e:
         print 'Keyboard Interrupt'
         try:
@@ -470,10 +425,24 @@ def MainLoop(port):
             pass
         sys.exit(1)
 
+def loadplugins(path='middlewares'):
+    print 'load plugins'
+    import sys, os, glob
+    paths = [p[:-3] for p in os.listdir(path) if p.endswith('.py')]
+    print 'all plugin files', paths
+    sys.path.append(path)
+    modules = map(__import__, paths)
+    for module in modules:
+        print 'module', module, dir(module)
+    return modules
+
 if __name__ == '__main__':
     print 'Date:', strfGMTime(), 'GMT'
     logger = getLogger()
     import sys
     if len(sys.argv) > 1: G['port'] = int(sys.argv[1])
     print 'listening port:', G['port']
-    MainLoop(G['port'])
+
+    middlewares = loadplugins()
+
+    MainLoop(G['port'], middlewares)
